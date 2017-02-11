@@ -3,7 +3,7 @@
 #include "cfg.h"
 cfg::cfg() {
 	s = (int32_t)'S';
-	__get_new_v_data = (int32_t)'P';
+	__get_new_v_data = (int32_t)'A';
 	// 'space' is the first printable ASCII character
 }
 cfg::~cfg() {
@@ -93,19 +93,35 @@ int32_t cfg::get_new_v() {
 
 void cfg::to_CNF() {
 // reference: en.wikipedia.org/wiki/Chomsky_normal_form
-	std::vector<int32_t> right;
 // ORDER of transformations: 
 // When choosing the order in which the above transformations are to be applied, it has to be considered that some transformations may destroy the result achieved by other ones. For example, START will re-introduce a unit rule if it is applied after UNIT. The table shows which orderings are admitted.
 // Moreover, the worst-case bloat in grammar size[note 5] depends on the transformation order. Using |G| to denote the size of the original grammar G, the size blow-up in the worst case may range from |G|2 to 22 |G|, depending on the transformation algorithm used.[6]:7 The blow-up in grammar size depends on the order between DEL and BIN. It may be exponential when DEL is done first, but is linear otherwise. UNIT can incur a quadratic blow-up in the size of the grammar.[6]:5 The orderings START,TERM,BIN,DEL,UNIT and START,BIN,DEL,UNIT,TERM lead to the least (i.e. quadratic) blow-up.
-/*
 // START: Eliminate the start symbol from right-hand sides
+	to_CNF_START();
+// TERM: Eliminate rules with nonsolitary terminals
+	to_CNF_TERM();
+// BIN: Eliminate right-hand sides with more than 2 nonterminals
+	to_CNF_BIN();
+// DEL: Eliminate epsilon-rules
+	to_CNF_DEL();
+// UNIT: Eliminate unit rules
+	to_CNF_UNIT();
+}
+
+void cfg::to_CNF_START() {
+// START: Eliminate the start symbol from right-hand sides
+	std::vector<int32_t> right;
 	int32_t S_0 = get_new_v();
 	right.clear();
 	right.push_back(s);
 	//add_v(S_0);
 	add_r(S_0, right);
 	s = S_0;
+}
+
+void cfg::to_CNF_TERM() {
 // TERM: Eliminate rules with nonsolitary terminals
+
 	std::map<int32_t, int32_t> term_to_new_var;
 	std::map<int32_t, int32_t> new_var_to_term; 
 	// new variables for all terminals
@@ -140,6 +156,9 @@ void cfg::to_CNF() {
 	}
 	r = TERMresult;
 	TERMresult.clear();
+}
+
+void cfg::to_CNF_BIN() {
 // BIN: Eliminate right-hand sides with more than 2 nonterminals
 	std::set<cfgrule> BINresult;
 	for (std::set<cfgrule>::iterator it = r.begin(); it != r.end(); it++) {
@@ -169,7 +188,9 @@ void cfg::to_CNF() {
 	}
 	r = BINresult;
 	BINresult.clear();
+}
 
+void cfg::to_CNF_DEL() {
 // DEL: Eliminate epsilon-rules
 	std::set<cfgrule> DELresult;
 	std::set<int32_t> nullable;
@@ -267,18 +288,74 @@ void cfg::to_CNF() {
 
 	r = DELresult;
 	DELresult.clear();
-*/
+}
+void cfg::to_CNF_UNIT() {
 // UNIT: Eliminate unit rules
+	std::set<cfgrule> removed;
+	std::set<cfgrule> UNITresult;
+	int UNIT_cont_loop = 1;
+	while (UNIT_cont_loop) {
+		UNIT_cont_loop = 0;
+		// remove X -> X
+		UNITresult.clear();
+		for (std::set<cfgrule>::iterator it = r.begin(); it != r.end(); it++) {
+			if (it->size() == 2) {
+				if ((*it)[0] == (*it)[1] && 
+					v.find((*it)[0]) != v.end() &&
+					v.find((*it)[1]) != v.end() ) {
+					// do not insert == remove
+					UNIT_cont_loop = 1;
+				} else {
+					UNITresult.insert(*it);
+				}
+			} else {
+				UNITresult.insert(*it);
+			}
+		}
+		r = UNITresult;
+		// find a rule X->Y to remove if there is a rule to remove
+		std::set<cfgrule>::iterator to_remove = r.end();
+		for (std::set<cfgrule>::iterator it = r.begin(); it != r.end(); it++) {
+			if (it->size() == 2) {
+				if (v.find((*it)[0]) != v.end() &&
+					v.find((*it)[1]) != v.end() ) {
+					to_remove = it;
+				}
+			}
+		}
+		if (to_remove != r.end()) {
+			UNIT_cont_loop = 1;
+			// if to_remove has already been done, don't add new rules.
+			if (removed.find(*to_remove) == removed.end()) {
+				// add to removed
+				removed.insert(*to_remove);
+				// add new rules
+				int32_t to_remove_left = (*to_remove)[0];
+				int32_t to_remove_right = (*to_remove)[1];
+				for (std::set<cfgrule>::iterator it = r.begin(); it != r.end(); it++) {
+					if ((*it)[0] == to_remove_right) {
+						cfgrule tmp_rule = *it;
+						tmp_rule[0] = to_remove_left;
+						UNITresult.insert(tmp_rule);
+					}
+				}
+			}
+			UNITresult.erase(*to_remove);
+		}
+		r = UNITresult;
+	}
+	return;
 }
 
-std::string cfg::description(int displayascii) {
+std::string cfg::description(int displaymode) {
 // set variable to nonzero to display ascii
-// but only integer version (displayascii = 0) can be used in checkcfgdescription();
+// but only integer version (displaymode = 0) can be used in checkcfgdescription();
+// displaymode = 2 -> javascript
 	std::string ret;
 	char tmpInt32Char[11];
 	std::string tmpInt32;	
-	if (displayascii == 0) {
-		ret += "V=<";
+	if (displaymode == 0) {
+		ret += "V={";
 		for (std::set<int32_t>::iterator it = v.begin(); it != v.end(); it++) {
 			sprintf(tmpInt32Char, "%d", *it);
 			tmpInt32 = tmpInt32Char;
@@ -287,9 +364,9 @@ std::string cfg::description(int displayascii) {
 			}
 			ret += tmpInt32;
 		}
-		ret += ">";
+		ret += "}";
 		ret += ";";
-		ret += "Sigma=<";
+		ret += "Sigma={";
 		for (std::set<int32_t>::iterator it = sigma.begin(); it != sigma.end(); it++) {
 			sprintf(tmpInt32Char, "%d", *it);
 			tmpInt32 = tmpInt32Char;
@@ -298,9 +375,9 @@ std::string cfg::description(int displayascii) {
 			}
 			ret += tmpInt32;
 		}
-		ret += ">";
+		ret += "}";
 		ret += ";";
-		ret += "R=<";
+		ret += "R={";
 		for (std::set<cfgrule>::iterator it = r.begin(); it != r.end(); it++) {
 			if (it != r.begin()) {
 				ret += ",";
@@ -308,7 +385,7 @@ std::string cfg::description(int displayascii) {
 			sprintf(tmpInt32Char, "%d", (*it)[0]);
 			tmpInt32 = tmpInt32Char;
 			ret += tmpInt32;
-			ret += ":<";
+			ret += ":{";
 			for (unsigned int itint = 1; itint < it->size(); itint++) {
 				if (itint != 1) {
 					ret += ",";
@@ -317,49 +394,95 @@ std::string cfg::description(int displayascii) {
 				tmpInt32 = tmpInt32Char;
 				ret += tmpInt32;
 			}
-			ret += ">";
+			ret += "}";
 		}
-		ret += ">";
+		ret += "}";
 		ret += ";";
 		ret += "S=";
 		sprintf(tmpInt32Char, "%d", s);
 		tmpInt32 = tmpInt32Char;
 		ret += tmpInt32;
-	} else {
-		ret += "V=<";
+	} else if (displaymode == 2) {
+		ret += "V=[";
+		for (std::set<int32_t>::iterator it = v.begin(); it != v.end(); it++) {
+			sprintf(tmpInt32Char, "%d", *it);
+			tmpInt32 = tmpInt32Char;
+			if (it != v.begin()) {
+				ret += ",";
+			}
+			ret += tmpInt32;
+		}
+		ret += "]";
+		ret += ";\n";
+		ret += "Sigma=[";
+		for (std::set<int32_t>::iterator it = sigma.begin(); it != sigma.end(); it++) {
+			sprintf(tmpInt32Char, "%d", *it);
+			tmpInt32 = tmpInt32Char;
+			if (it != sigma.begin()) {
+				ret += ",";
+			}
+			ret += tmpInt32;
+		}
+		ret += "]";
+		ret += ";\n";
+		ret += "R=[";
+		for (std::set<cfgrule>::iterator it = r.begin(); it != r.end(); it++) {
+			if (it != r.begin()) {
+				ret += ",";
+			}
+			ret += "[";
+			for (unsigned int itint = 0; itint < it->size(); itint++) {
+				if (itint != 0) {
+					ret += ",";
+				}
+				sprintf(tmpInt32Char, "%d", (*it)[itint]);
+				tmpInt32 = tmpInt32Char;
+				ret += tmpInt32;
+			}
+			ret += "]";
+		}
+		ret += "]";
+		ret += ";\n";
+		ret += "S=";
+		sprintf(tmpInt32Char, "%d", s);
+		tmpInt32 = tmpInt32Char;
+		ret += tmpInt32;
+		ret += ";\n";
+	} else if (displaymode == 1) {
+		ret += "V={";
 		for (std::set<int32_t>::iterator it = v.begin(); it != v.end(); it++) {
 			if (it != v.begin()) {
 				ret += ",";
 			}
 			ret.push_back((char)*it);
 		}
-		ret += ">";
+		ret += "}";
 		ret += ";";
-		ret += "Sigma=<";
+		ret += "Sigma={";
 		for (std::set<int32_t>::iterator it = sigma.begin(); it != sigma.end(); it++) {
 			if (it != sigma.begin()) {
 				ret += ",";
 			}
 			ret.push_back((char)*it);
 		}
-		ret += ">";
+		ret += "}";
 		ret += ";";
-		ret += "R=<";
+		ret += "R={";
 		for (std::set<cfgrule>::iterator it = r.begin(); it != r.end(); it++) {
 			if (it != r.begin()) {
 				ret += ",";
 			}
 			ret.push_back((char)(*it)[0]);
-			ret += ":<";
+			ret += ":{";
 			for (unsigned int itint = 1; itint < it->size(); itint++) {
 				if (itint != 1) {
 					ret += ",";
 				}
 				ret.push_back((char)(*it)[itint]);
 			}
-			ret += ">";
+			ret += "}";
 		}
-		ret += ">";
+		ret += "}";
 		ret += ";";
 		ret += "S=";
 		ret.push_back((char)s);

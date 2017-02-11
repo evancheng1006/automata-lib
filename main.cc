@@ -2,13 +2,13 @@
 #include "cfg.h"
 int main() {
 	cfg G;
-/*
+///*
 	G.add_v('S');
 	G.add_sigma('0');
 	G.add_sigma('1');
 	G.add_r('S', "0S1");
 	G.add_r('S', "");
-*/
+//*/
 /*
 	G.add_v('S');
 	G.add_v('A');
@@ -26,7 +26,7 @@ int main() {
 	G.add_r('A', "a");
 	G.add_r('A', "");
 */
-
+/*
 	G.add_v('S');
 	G.add_v('A');
 	G.add_v('B');
@@ -42,10 +42,20 @@ int main() {
 	G.add_r('A', "a");
 	G.add_r('B', "b");
 	G.add_r('C', "c");
+	G.add_r('C', "");
+*/
+/*
+	G.add_v('S');
+	G.add_v('A');
+	G.add_sigma('a');
+	G.add_r('S', "A");
+	G.add_r('A', "");
+*/
 
-
-	std::cout << G.description(1) << "\n";
+	std::cout << G.description(2) << "\n";
 	G.to_CNF();
-	std::cout << G.description(1) << "\n";
+	std::cout << G.description(2) << "\n";
+	G.to_CNF();
+	std::cout << G.description(2) << "\n";
 	return 0;
 }

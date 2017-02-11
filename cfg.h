@@ -20,6 +20,13 @@ private:
 	
 	int32_t get_new_v(); // get new variable
 	int32_t __get_new_v_data; // called by get_new_v()
+
+	void to_CNF_START();
+	void to_CNF_TERM();
+	void to_CNF_BIN();
+	void to_CNF_DEL();
+	void to_CNF_UNIT();
+
 public:
 	cfg();
 	~cfg();
@@ -35,7 +42,7 @@ public:
 
 	void to_CNF();
 
-	std::string description(int displayascii = 0); // used for debugging
+	std::string description(int displaymode = 0); // used for debugging
 	// set variable to nonzero to display ascii
 
 };
